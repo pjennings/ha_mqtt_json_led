@@ -31,10 +31,10 @@ def state_equal(a, b):
     return True
 
 class Controller:
-    def __init__(self, rpin=14, gpin=5, bpin=12):
-        self._rp = LED(rpin, name="R")
-        self._gp = LED(gpin, name="G")
-        self._bp = LED(bpin, name="B")
+    def __init__(self, rpin=14, gpin=5, bpin=12, freq=1000):
+        self._rp = LED(rpin, name="R", freq=freq)
+        self._gp = LED(gpin, name="G", freq=freq)
+        self._bp = LED(bpin, name="B", freq=freq)
 
         self.done = True
 
@@ -99,4 +99,9 @@ class Controller:
         if state_equal(self.cstate, self.tstate) or t >= 0.999:
             self.cstate = self.tstate
             self.done = True
+
+    def kill(self):
+        self._rp.kill()
+        self._gp.kill()
+        self._bp.kill()
 

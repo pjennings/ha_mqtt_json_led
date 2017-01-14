@@ -17,3 +17,6 @@ class LED:
         else:                                                                                                                                
             self._pwm.duty(duty)                                                                                                             
 
+    def kill(self):
+        self._pwm.deinit()
+
