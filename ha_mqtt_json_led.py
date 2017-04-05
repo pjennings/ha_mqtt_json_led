@@ -15,7 +15,21 @@ from Controller import Controller
 
 CONFIG_FILE = "ha_mqtt_json_led.config"
 
+def write_config(config):
+    print("WRITE_CONFIG")
+    if config['PERSISTENT']:
+        with open(CONFIG_FILE, "w") as f:
+            f.write(ujson.dumps(config))
+
 async def main_loop():
+    file_config = None
+    if CONFIG_FILE in os.listdir():
+        try:
+            file_config = ujson.loads(open(CONFIG_FILE).read())
+        except ValueError:
+            print("Bad config file -- deleting")
+            os.remove(CONFIG_FILE)
+
     try:
         ID = ubinascii.hexlify(machine.unique_id()).decode('ascii')
     except AttributeError:
@@ -23,12 +37,13 @@ async def main_loop():
 
     config = {
         # MQTT config
-        "ID": ID,
+        "CLIENT_ID": "mp_mqtt_json_"+ID,
         "SERVER": "broker.hivemq.com",
         "CONTROL_TOPIC": "/light/"+ID+"/control",
         "STATE_TOPIC": "/light/"+ID+"/state",
         "CONFIG_TOPIC": "/light/"+ID+"/config",
         "GLOBAL_CONFIG_TOPIC": "/light/config",
+        "PERSISTENT": True,
 
         # HW config
         "RED_PIN": 14,
@@ -37,12 +52,10 @@ async def main_loop():
         "PWM_FREQ": 1000
     }
 
-    if CONFIG_FILE in os.listdir():
-        try:
-            config.update(ujson.loads(open(CONFIG_FILE).read()))
-        except ValueError:
-            print("Bad config file -- deleting")
-            os.remove(CONFIG_FILE)
+    if file_config is not None:
+        config.update(file_config)
+
+    write_config(config)
 
     async def reconfig(event, client, controller, reconfig_done):
         await event
@@ -51,11 +64,14 @@ async def main_loop():
         controller.kill()
         old_config = deepcopy(config)
         config.update(ujson.loads(event.value()))
+        write_config(config)
         event.clear()
         print("DONE RECONFIG")
         reconfig_done.set(True)
 
-    client = AsyncMqttClient("mp_mqtt_json_"+config['ID'], config['SERVER'])
+    print("CONFIG:", config)
+
+    client = AsyncMqttClient(config['CLIENT_ID'], config['SERVER'])
     client.connect()
     control_event = client.subscribe(config['CONTROL_TOPIC'])
     config_event = client.subscribe(config['CONFIG_TOPIC'])
