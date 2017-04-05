@@ -1,5 +1,7 @@
 import machine
 import time
+import uasyncio as asyncio
+import ujson
 
 from copy import deepcopy
 
@@ -37,6 +39,7 @@ class Controller:
         self._bp = LED(bpin, name="B", freq=freq)
 
         self.done = True
+        self.alive = True
 
         self.cstate = state()
         self.sstate = deepcopy(self.cstate)
@@ -46,6 +49,24 @@ class Controller:
 
     def get_state(self):
         return self.cstate
+
+    def aloop(self, control_event, status_event=None):
+        while self.alive:
+            await control_event.__await__()
+            try:
+                target = ujson.loads(control_event.value())
+                self.set_target(target)
+            except ValueError:
+                print("Bad formatting: {}".format(control_event.value()))
+            finally:
+                control_event.clear()
+
+            while not self.done:
+                await asyncio.sleep(0.1)
+                self.update()
+
+            if status_event is not None:
+                status_event.set(ujson.dumps(self.cstate))
 
     def set_target(self, new_state):
         # Special handling for on/off transitions
@@ -85,6 +106,10 @@ class Controller:
                 t = time.ticks_diff(self.start, time.ticks_ms())/self.duration
             except ZeroDivisionError:
                 t = 1
+
+            # Apparently time.ticks_diff changed direction at some point...
+            if t < 0:
+                t = -t
             self.cstate['brightness'] = int(self.sstate['brightness']+(self.tstate['brightness']-self.sstate['brightness'])*t)
             self.cstate['color']['r'] = int(self.sstate['color']['r']+(self.tstate['color']['r']-self.sstate['color']['r'])*t)
             self.cstate['color']['g'] = int(self.sstate['color']['g']+(self.tstate['color']['g']-self.sstate['color']['g'])*t)
@@ -104,4 +129,5 @@ class Controller:
         self._rp.kill()
         self._gp.kill()
         self._bp.kill()
+        self.alive = False
 
