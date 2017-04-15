@@ -4,6 +4,7 @@ import os
 import ubinascii
 import ujson
 import uasyncio as asyncio
+import urandom
 
 from copy import deepcopy
 from umqtt.robust import MQTTClient
@@ -33,7 +34,7 @@ async def main_loop():
     try:
         ID = ubinascii.hexlify(machine.unique_id()).decode('ascii')
     except AttributeError:
-        ID = "asdfasdfasdf"
+        ID = "ha_mqtt_json_led_"+"".join([str(urandom.getrandbits(x)) for x in [3]*8])
 
     config = {
         # MQTT config
