@@ -17,7 +17,6 @@ from Controller import Controller
 CONFIG_FILE = "ha_mqtt_json_led.config"
 
 def write_config(config):
-    print("WRITE_CONFIG")
     if config['PERSISTENT']:
         with open(CONFIG_FILE, "w") as f:
             f.write(ujson.dumps(config))
@@ -60,17 +59,13 @@ async def main_loop():
 
     async def reconfig(event, client, controller, reconfig_done):
         await event
-        print("RECONFIG")
         client.disconnect()
         controller.kill()
         old_config = deepcopy(config)
         config.update(ujson.loads(event.value()))
         write_config(config)
         event.clear()
-        print("DONE RECONFIG")
         reconfig_done.set(True)
-
-    print("CONFIG:", config)
 
     client = AsyncMqttClient(config['CLIENT_ID'], config['SERVER'])
     client.connect()
@@ -87,7 +82,6 @@ async def main_loop():
     async_loop.create_task(controller.aloop(control_event, client.publish(config['STATE_TOPIC'])))
 
     await reconfig_done
-    print("MAIN LOOP DONE")
 
 def run_main_loop():
     while True:
