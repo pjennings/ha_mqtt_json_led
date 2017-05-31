@@ -79,7 +79,7 @@ async def main_loop():
     client.connect()
     control_event = client.subscribe(config['CONTROL_TOPIC'])
     config_event = client.subscribe(config['CONFIG_TOPIC'])
-    global_config_event = client.subscribe(config['GLOBAL_CONFIG_TOPIC'])
+    client.subscribe(config['GLOBAL_CONFIG_TOPIC'], event=config_event)
     state_event = client.publish(config['STATE_TOPIC'])
     get_state_event = client.subscribe(config['STATE_REQ_TOPIC'])
     reconfig_done = Event()
@@ -88,7 +88,6 @@ async def main_loop():
 
     async_loop = asyncio.get_event_loop()
     async_loop.create_task(reconfig(config_event, client, controller, reconfig_done))
-    async_loop.create_task(reconfig(global_config_event, client, controller, reconfig_done))
     async_loop.create_task(controller.aloop(control_event, state_event))
     async_loop.create_task(get_state(controller, get_state_event, state_event))
 
