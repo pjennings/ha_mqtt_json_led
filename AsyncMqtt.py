@@ -44,15 +44,16 @@ class AsyncMqttClient(MQTTClient):
         self.events[topic].append(e)
         return e
 
-    def publish(self, topic):
-        my_event = Event()
+    def publish(self, topic, event=None):
+        if event is None:
+            event = Event()
 
-        async def publish_loop(topic,event):
+        async def publish_loop(topic,p_event):
             while self._alive:
-                await event
-                MQTTClient.publish(self, topic, event.value())
-                event.clear()
+                await p_event
+                MQTTClient.publish(self, topic, p_event.value())
+                p_event.clear()
 
         async_loop = asyncio.get_event_loop()
-        async_loop.create_task(publish_loop(topic,my_event))
-        return my_event
+        async_loop.create_task(publish_loop(topic,event))
+        return event
