@@ -41,6 +41,7 @@ async def main_loop():
         "SERVER": "iot.eclipse.org",
         "CONTROL_TOPIC": "/light/"+ID+"/control",
         "STATE_TOPIC": "/light/"+ID+"/state",
+        "STATE_REQ_TOPIC": "/light/"+ID+"/get_state",
         "CONFIG_TOPIC": "/light/"+ID+"/config",
         "GLOBAL_CONFIG_TOPIC": "/light/config",
         "PERSISTENT": True,
@@ -65,13 +66,22 @@ async def main_loop():
         config.update(ujson.loads(event.value()))
         write_config(config)
         event.clear()
+        client.connect()
         reconfig_done.set(True)
+
+    async def get_state(c, in_event, out_event):
+        while True:
+            await in_event
+            out_event.set(c.get_state())
+            in_event.clear()
 
     client = AsyncMqttClient(config['CLIENT_ID'], config['SERVER'])
     client.connect()
     control_event = client.subscribe(config['CONTROL_TOPIC'])
     config_event = client.subscribe(config['CONFIG_TOPIC'])
     global_config_event = client.subscribe(config['GLOBAL_CONFIG_TOPIC'])
+    state_event = client.publish(config['STATE_TOPIC'])
+    get_state_event = client.subscribe(config['STATE_REQ_TOPIC'])
     reconfig_done = Event()
 
     controller = Controller(rpin=config['RED_PIN'], gpin=config['GREEN_PIN'], bpin=config['BLUE_PIN'], freq=config['PWM_FREQ'])
@@ -79,9 +89,11 @@ async def main_loop():
     async_loop = asyncio.get_event_loop()
     async_loop.create_task(reconfig(config_event, client, controller, reconfig_done))
     async_loop.create_task(reconfig(global_config_event, client, controller, reconfig_done))
-    async_loop.create_task(controller.aloop(control_event, client.publish(config['STATE_TOPIC'])))
+    async_loop.create_task(controller.aloop(control_event, state_event))
+    async_loop.create_task(get_state(controller, get_state_event, state_event))
 
-    await reconfig_done
+    while True:
+        yield from asyncio.sleep(100)
 
 def run_main_loop():
     while True:
