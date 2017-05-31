@@ -35,14 +35,15 @@ class AsyncMqttClient(MQTTClient):
     def set_callback(self, *args, **kwargs):
         raise ImplementationError("Callbacks are not used for AsyncMqttClient")
 
-    def subscribe(self, topic, qos=0):
+    def subscribe(self, topic, qos=0, event=None):
         print("Subscribing to {}".format(topic))
         if not topic in self.events:
             self.events[topic] = []
             MQTTClient.subscribe(self, topic, qos)
-        e = Event()
-        self.events[topic].append(e)
-        return e
+        if event is None:
+            event = Event()
+        self.events[topic].append(event)
+        return event
 
     def publish(self, topic, event=None):
         if event is None:
