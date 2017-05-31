@@ -48,7 +48,7 @@ class Controller:
         self.update()
 
     def get_state(self):
-        return self.cstate
+        return ujson.dumps(self.cstate)
 
     def aloop(self, control_event, status_event=None):
         while self.alive:
@@ -66,7 +66,7 @@ class Controller:
                 self.update()
 
             if status_event is not None:
-                status_event.set(ujson.dumps(self.cstate))
+                status_event.set(self.get_state())
 
     def set_target(self, new_state):
         # Special handling for on/off transitions
