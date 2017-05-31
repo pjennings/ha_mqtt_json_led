@@ -7,7 +7,7 @@ import uasyncio as asyncio
 import urandom
 
 from copy import deepcopy
-from umqtt.robust import MQTTClient
+from umqtt.simple import MQTTClient
 from AsyncMqtt import AsyncMqttClient
 from Event import Event
 
