@@ -38,7 +38,7 @@ async def main_loop():
     config = {
         # MQTT config
         "CLIENT_ID": "mp_mqtt_json_"+ID,
-        "SERVER": "broker.hivemq.com",
+        "SERVER": "iot.eclipse.org",
         "CONTROL_TOPIC": "/light/"+ID+"/control",
         "STATE_TOPIC": "/light/"+ID+"/state",
         "CONFIG_TOPIC": "/light/"+ID+"/config",
