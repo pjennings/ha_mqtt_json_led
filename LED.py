@@ -13,7 +13,13 @@ class LED:
             self._pwm = None                                                                                                  
         self._freq = freq                                                                                                                    
         self.name = name                                                                                                                     
-                                                                                                                                             
+
+    def reinit(self):
+        try:
+            self._pwm = machine.PWM(self._pin) 
+        except AttributeError:
+            self._pwm = None
+
     def update(self, brightness):                                                                                                            
         duty = int(1023*brightness)                                                                                                          
         print("%s: Setting to %s (%s)" % (self.name, brightness, duty))
