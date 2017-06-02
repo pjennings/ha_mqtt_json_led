@@ -58,21 +58,14 @@ async def main_loop():
 
     write_config(config)
 
-    async def reconfig(event, client, controller, reconfig_done):
-        await event
-        client.disconnect()
-        controller.kill()
-        old_config = deepcopy(config)
-        config.update(ujson.loads(event.value()))
-        write_config(config)
-        event.clear()
-        client.connect()
-        reconfig_done.set(True)
-
     async def get_state(c, in_event, out_event):
         while True:
             await in_event
-            out_event.set(c.get_state())
+            if in_event.value() is None:
+                # value will be none if main loop was killed
+                break
+            else:
+                out_event.set(c.get_state())
             in_event.clear()
 
     client = AsyncMqttClient(config['CLIENT_ID'], config['SERVER'])
@@ -82,17 +75,25 @@ async def main_loop():
     client.subscribe(config['GLOBAL_CONFIG_TOPIC'], event=config_event)
     state_event = client.publish(config['STATE_TOPIC'])
     get_state_event = client.subscribe(config['STATE_REQ_TOPIC'])
-    reconfig_done = Event()
 
     controller = Controller(rpin=config['RED_PIN'], gpin=config['GREEN_PIN'], bpin=config['BLUE_PIN'], freq=config['PWM_FREQ'])
 
+    # Set up async handlers for control/get_state events
     async_loop = asyncio.get_event_loop()
-    async_loop.create_task(reconfig(config_event, client, controller, reconfig_done))
     async_loop.create_task(controller.aloop(control_event, state_event))
     async_loop.create_task(get_state(controller, get_state_event, state_event))
 
-    while True:
-        yield from asyncio.sleep(100)
+    # In case of reconfig, write the new config and then return, which will allow run_main_loop to rerun this function
+    await config_event
+    config.update(ujson.loads(config_event.value()))
+    write_config(config)
+
+    client.disconnect()
+    controller.kill()
+    old_config = deepcopy(config)
+    get_state_event.set(None)
+
+    async_loop.stop()
 
 def run_main_loop():
     while True:
