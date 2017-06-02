@@ -25,6 +25,9 @@ class AsyncMqttClient(MQTTClient):
 
     def disconnect(self):
         self._alive = False
+        for topic,events in self.events.items():
+            for event in events:
+                event.set(None)
         MQTTClient.disconnect(self)
 
     async def subscribe_loop(self):
@@ -52,8 +55,10 @@ class AsyncMqttClient(MQTTClient):
         async def publish_loop(topic,p_event):
             while self._alive:
                 await p_event
-                MQTTClient.publish(self, topic, p_event.value())
-                p_event.clear()
+                if self._alive:
+                    # Check self._alive again because client disconnect will trigger event in order to break await above
+                    MQTTClient.publish(self, topic, p_event.value())
+                    p_event.clear()
 
         async_loop = asyncio.get_event_loop()
         async_loop.create_task(publish_loop(topic,event))
