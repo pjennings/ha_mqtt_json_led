@@ -53,6 +53,10 @@ class Controller:
     def aloop(self, control_event, status_event=None):
         while self.alive:
             await control_event.__await__()
+            if control_event.value() is None:
+                self.alive = False
+                break
+
             try:
                 target = ujson.loads(control_event.value())
                 self.set_target(target)
