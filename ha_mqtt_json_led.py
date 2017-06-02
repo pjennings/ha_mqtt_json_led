@@ -96,7 +96,7 @@ async def main_loop():
     async_loop.stop()
 
 def run_main_loop():
+    async_loop = asyncio.get_event_loop()
     while True:
-        async_loop = asyncio.get_event_loop()
         async_loop.run_until_complete(main_loop())
 
