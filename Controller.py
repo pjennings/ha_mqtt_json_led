@@ -7,6 +7,28 @@ from copy import deepcopy
 
 from LED import LED
 
+def config():
+    c = {
+        # MQTT config
+        'mqtt': {
+            'publish': {
+                "STATE": "state",
+            },
+            'subscribe': {
+                "CONTRO": "control",
+                "STATE_REQ": "get_state",
+                "CONFIG": "config"
+            }
+        },
+
+        # HW config
+        "RED_PIN": 14,
+        "GREEN_PIN": 5,
+        "BLUE_PIN": 12,
+        "PWM_FREQ": 1000
+    }
+    return c
+
 def state(src=None):
     s = {
         'brightness': 255,
@@ -33,22 +55,31 @@ def state_equal(a, b):
     return True
 
 class Controller:
-    def __init__(self, rpin=14, gpin=5, bpin=12, freq=1000):
-        self._rp = LED(rpin, name="R", freq=freq)
-        self._gp = LED(gpin, name="G", freq=freq)
-        self._bp = LED(bpin, name="B", freq=freq)
-
+    def __init__(self, config):
+        self._rp = None
+        self._gp = None
+        self._bp = None
+        self.alive = False
         self.done = True
-        self.alive = True
-
-        self.cstate = state()
-        self.sstate = deepcopy(self.cstate)
-        self.tstate = deepcopy(self.cstate)
-        self.on_state = deepcopy(self.cstate)
-        self.update()
+        self.reconfig(config)
 
     def get_state(self):
         return ujson.dumps(self.cstate)
+
+    def start(self, events):
+        async_loop = asyncio.get_event_loop()
+        async_loop.create_task(self.aloop(events['CONTROL'], events['STATE']))
+        async_loop.create_task(self.aget_state(events['STATE_REQ'], events['STATE']))
+
+    def aget_state(self, in_event, out_event):
+        while self.alive:
+            await in_event
+            if in_event.value() is None:
+                # value will be none if main loop was killed
+                break
+            else:
+                out_event.set(self.get_state())
+            in_event.clear()
 
     def aloop(self, control_event, status_event=None):
         while self.alive:
@@ -130,8 +161,27 @@ class Controller:
             self.done = True
 
     def kill(self):
-        self._rp.kill()
-        self._gp.kill()
-        self._bp.kill()
+        if self._rp is not None:
+            self._rp.kill()
+        if self._gp is not None:
+            self._gp.kill()
+        if self._bp is not None:
+            self._bp.kill()
         self.alive = False
 
+    def reconfig(self, new_config):
+        self.kill()
+        self.config = new_config
+
+        self._rp = LED(self.config['RED_PIN'], name="R", freq=self.config['PWM_FREQ'])
+        self._gp = LED(self.config['GREEN_PIN'], name="G", freq=self.config['PWM_FREQ'])
+        self._bp = LED(self.config['BLUE_PIN'], name="B", freq=self.config['PWM_FREQ'])
+
+        self.done = True
+        self.alive = True
+
+        self.cstate = state()
+        self.sstate = deepcopy(self.cstate)
+        self.tstate = deepcopy(self.cstate)
+        self.on_state = deepcopy(self.cstate)
+        self.update()

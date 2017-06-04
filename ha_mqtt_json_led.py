@@ -11,9 +11,6 @@ from umqtt.simple import MQTTClient
 from AsyncMqtt import AsyncMqttClient
 from Event import Event
 
-from LED import LED
-from Controller import Controller
-
 CONFIG_FILE = "ha_mqtt_json_led.config"
 
 def write_config(config):
@@ -33,70 +30,88 @@ async def main_loop():
     try:
         ID = ubinascii.hexlify(machine.unique_id()).decode('ascii')
     except AttributeError:
-        ID = "ha_mqtt_json_led_"+"".join([str(urandom.getrandbits(x)) for x in [3]*8])
+        ID = "".join([str(urandom.getrandbits(x)) for x in [3]*8])
 
     config = {
         # MQTT config
         "CLIENT_ID": "mp_mqtt_json_"+ID,
         "SERVER": "iot.eclipse.org",
-        "CONTROL_TOPIC": "/light/"+ID+"/control",
-        "STATE_TOPIC": "/light/"+ID+"/state",
-        "STATE_REQ_TOPIC": "/light/"+ID+"/get_state",
-        "CONFIG_TOPIC": "/light/"+ID+"/config",
-        "GLOBAL_CONFIG_TOPIC": "/light/config",
+        "CONFIG_TOPIC": "/"+ID+"/config",
         "PERSISTENT": True,
 
-        # HW config
-        "RED_PIN": 14,
-        "GREEN_PIN": 5,
-        "BLUE_PIN": 12,
-        "PWM_FREQ": 1000
+        "modules": {
+            "light": {
+                "module": "Controller",
+                "config": None
+            }
+        }
     }
 
     if file_config is not None:
         config.update(file_config)
 
-    write_config(config)
-
-    async def get_state(c, in_event, out_event):
-        while True:
-            await in_event
-            if in_event.value() is None:
-                # value will be none if main loop was killed
-                break
-            else:
-                out_event.set(c.get_state())
-            in_event.clear()
-
+    # Connect to mqtt
     client = AsyncMqttClient(config['CLIENT_ID'], config['SERVER'])
     client.connect()
-    control_event = client.subscribe(config['CONTROL_TOPIC'])
+
+    # Import and initialize modules
+    modules = {}
+    instances = {}
+    events = {}
+    for name,val in config['modules'].items():
+        try:
+            exec("import {}".format(val['module']), modules)
+            if val['config'] is None:
+                val['config'] = modules[val['module']].config()
+            print(modules)
+            instances[name] = getattr(modules[val['module']], val['module'])(val['config'])
+            if 'mqtt' in val['config']:
+                events[name] = {}
+                for desc,topic in val['config']['mqtt']['publish'].items():
+                    events[name][desc] = client.publish("/"+"/".join([ID, name, topic]))
+                for desc,topic in val['config']['mqtt']['subscribe'].items():
+                    events[name][desc] = client.subscribe("/"+"/".join([ID, name, topic]))
+        except ImportError:
+            print("WARNING: Could not import {}".format(name))
+            modules[name] = None
+
+    write_config(config)
+
     config_event = client.subscribe(config['CONFIG_TOPIC'])
-    client.subscribe(config['GLOBAL_CONFIG_TOPIC'], event=config_event)
-    state_event = client.publish(config['STATE_TOPIC'])
-    get_state_event = client.subscribe(config['STATE_REQ_TOPIC'])
+    #client.subscribe(config['CONFIG_TOPIC'], event=config_event)
 
-    controller = Controller(rpin=config['RED_PIN'], gpin=config['GREEN_PIN'], bpin=config['BLUE_PIN'], freq=config['PWM_FREQ'])
-
-    # Set up async handlers for control/get_state events
-    async_loop = asyncio.get_event_loop()
-    async_loop.create_task(controller.aloop(control_event, state_event))
-    async_loop.create_task(get_state(controller, get_state_event, state_event))
+    # Start each inst
+    for name,inst in instances.items():
+        inst.start(events[name])
 
     # In case of reconfig, write the new config and then return, which will allow run_main_loop to rerun this function
     await config_event
-    config.update(ujson.loads(config_event.value()))
-    write_config(config)
+
+    # Will return false if config_event.value() is empty -- special case to end loop
+    result = False
+    if config_event.value() != "":
+        config.update(ujson.loads(config_event.value()))
+        write_config(config)
+        result = True
 
     client.disconnect()
     controller.kill()
     old_config = deepcopy(config)
     get_state_event.set(None)
 
-    async_loop.stop()
+    while(len(async_loop.q) > 1):
+        print("main_loop: {}".format(len(async_loop.q)))
+        yield from asyncio.sleep(1)
+
+    return result
 
 def run_main_loop():
     async_loop = asyncio.get_event_loop()
     while True:
-        async_loop.run_until_complete(main_loop())
+        if not async_loop.run_until_complete(main_loop()):
+            break
+
+        while(len(async_loop.q) > 0):
+            print("run_main_loop: {}".format(len(async_loop.q)))
+            time.sleep(1)
 
