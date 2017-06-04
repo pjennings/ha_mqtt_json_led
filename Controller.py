@@ -15,7 +15,7 @@ def config():
                 "STATE": "state",
             },
             'subscribe': {
-                "CONTRO": "control",
+                "CONTROL": "control",
                 "STATE_REQ": "get_state",
                 "CONFIG": "config"
             }
