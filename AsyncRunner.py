@@ -36,6 +36,16 @@ class AsyncRunner:
                 os.remove(self.config_fn)
         return False
 
+    async def get_config(self, in_event, out_event):
+        while True:
+            await in_event
+            if in_event.value() is None:
+                # value will be none if main loop was killed
+                break
+            else:
+                out_event.set(ujson.dumps(self.config))
+            in_event.clear()
+
     async def main_loop(self):
         config = self.config
 
@@ -67,11 +77,16 @@ class AsyncRunner:
         self.write_config()
 
         config_event = client.subscribe(config['CONFIG_TOPIC'])
-        #client.subscribe(config['CONFIG_TOPIC'], event=config_event)
+        get_config_event = client.subscribe(config['GET_CONFIG_TOPIC'])
+        config_state_event = client.publish(config['CONFIG_STATE_TOPIC'])
 
         # Start each inst
         for name,inst in instances.items():
             inst.start(events[name])
+
+        # Wait for get_config events
+        async_loop = asyncio.get_event_loop()
+        async_loop.create_task(self.get_config(get_config_event, config_state_event))
 
         # In case of reconfig, write the new config and then return, which will allow run_main_loop to rerun this function
         await config_event
@@ -119,6 +134,8 @@ def main():
         "CLIENT_ID": "mp_mqtt_json_"+ID,
         "SERVER": "iot.eclipse.org",
         "CONFIG_TOPIC": "/"+ID+"/config",
+        "GET_CONFIG_TOPIC": "/"+ID+"/get_config",
+        "CONFIG_STATE_TOPIC": "/"+ID+"/current_config",
         "PERSISTENT": True,
 
         "modules": {
