@@ -25,7 +25,10 @@ def config():
         "RED_PIN": 14,
         "GREEN_PIN": 5,
         "BLUE_PIN": 12,
-        "PWM_FREQ": 1000
+        "PWM_FREQ": 1000,
+
+        # Misc config
+        "DEFAULT_STATE": None
     }
     return c
 
@@ -83,6 +86,8 @@ class Controller:
 
     def aloop(self, control_event, status_event=None):
         async_loop = asyncio.get_event_loop()
+        if self.config['DEFAULT_STATE'] is not None:
+            control_event.set(ujson.dumps(self.config['DEFAULT_STATE']))
         while self.alive:
             await control_event.__await__()
             if control_event.value() is None:
