@@ -58,13 +58,15 @@ def state_equal(a, b):
     return True
 
 class Controller:
-    def __init__(self, config):
+    def __init__(self, in_config):
         self._rp = None
         self._gp = None
         self._bp = None
         self.alive = False
         self.done = True
-        self.reconfig(config)
+        self.config = config()
+        self.config.update(in_config)
+        self.reconfig(self.config)
 
     def get_state(self):
         return ujson.dumps(self.cstate)
