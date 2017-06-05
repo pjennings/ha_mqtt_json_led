@@ -82,6 +82,7 @@ class Controller:
             in_event.clear()
 
     def aloop(self, control_event, status_event=None):
+        async_loop = asyncio.get_event_loop()
         while self.alive:
             await control_event.__await__()
             if control_event.value() is None:
@@ -96,12 +97,7 @@ class Controller:
             finally:
                 control_event.clear()
 
-            while not self.done:
-                await asyncio.sleep(0.1)
-                self.update()
-
-            if status_event is not None:
-                status_event.set(self.get_state())
+            async_loop.call_soon(self.update(status_event))
 
     def set_target(self, new_state):
         # Special handling for on/off transitions
@@ -135,8 +131,9 @@ class Controller:
         self.last_update = time.ticks_ms()
         self.update()
 
-    def update(self):
-        if not self.done:
+    async def update(self, status_event=None):
+        print("UPDATE")
+        while not self.done:
             try:
                 t = time.ticks_diff(self.start, time.ticks_ms())/self.duration
             except ZeroDivisionError:
@@ -156,9 +153,14 @@ class Controller:
             self._gp.update(float(self.cstate['color']['g']*b_pct)/255.0)
             self._bp.update(float(self.cstate['color']['b']*b_pct)/255.0)
 
-        if state_equal(self.cstate, self.tstate) or t >= 0.999:
-            self.cstate = self.tstate
-            self.done = True
+            if state_equal(self.cstate, self.tstate) or t >= 0.999:
+                self.cstate = self.tstate
+                self.done = True
+
+                if status_event is not None:
+                    status_event.set(self.get_state())
+
+            await asyncio.sleep(0.1)
 
     def kill(self):
         if self._rp is not None:
