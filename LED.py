@@ -21,7 +21,7 @@ class LED:
             self._pwm = None
 
     def update(self, brightness):                                                                                                            
-        duty = min(int(1023*brightness), 1.0)
+        duty = max(min(int(1023*brightness), 1023), 0)
         print("%s: Setting to %s (%s)" % (self.name, brightness, duty))
         if self._pwm is not None:
             if brightness <= 0.001:
